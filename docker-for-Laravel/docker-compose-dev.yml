@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  pgadmin4:
+    depends_on:
+      - postgresql
+    image: dpage/pgadmin4:7.4
+    restart: always
+    container_name: db_manager
+    env_file:
+      - ./envs/pgadmin.env
+    ports:
+      - $DB_MANAGER_PORT:8080
+    volumes:
+      - ./volumes/pgadmin:/var/lib/pgadmin
+
+  postgresql:
+    image: postgres:12.17-alpine3.19
+    restart: unless-stopped
+    container_name: tenant1_db
+    ports:
+      - $DB_PORT:5432
+    volumes:
+      - ./volumes/postgres/postgresql:/var/lib/postgresql/data
+    env_file:
+      - ./envs/postgresql.env
+
+  app:
+    depends_on:
+      - postgresql
+    build:
+      dockerfile: ./dockerfiles/app.Dockerfile
+      context: .
+    image: $APP_IMAGE
+    restart: unless-stopped
+    container_name: app
+    volumes:
+      - $APP_VOLUMES_SRC:/var/www/html
+    env_file:
+      - ./envs/app.env
+    networks:
+      - laravel
+  
+  nginx:
+    depends_on:
+      - app
+    image: nginx:stable-alpine3.17
+    restart: unless-stopped
+    container_name: nginx
+    ports:
+      - $NGINX_PORT:80
+    volumes:
+      - $APP_VOLUMES_SRC:/var/www/html
+      - $SERVER_SRC:/etc/nginx/conf.d/default.conf
+    networks:
+      - laravel
+  
+networks:
+  laravel:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.18.0.0/16"
